@@ -36,6 +36,7 @@ public class LLMReplaceStatement extends StatementEdit {
     private static final long serialVersionUID = 1112502387236768006L;
     public String destinationFilename;
     public int destinationStatement;
+	public Node destinationNode;
 
     private PromptTemplate promptTemplate;
     //private String modelType="OpenAI"; // Should be param from c'tor
@@ -126,6 +127,7 @@ public class LLMReplaceStatement extends StatementEdit {
     	SourceFileTree sf = (SourceFileTree) sourceFile;
 
     	Node destination = sf.getNode(destinationStatement);
+		this.destinationNode = destination;
 
     	if (destination == null) {
     		return Collections.singletonList(sf); // targeting a deleted location just does nothing.
@@ -164,9 +166,16 @@ public class LLMReplaceStatement extends StatementEdit {
 	    	Logger.info(prompt);
 	    	lastPrompt = prompt;
 	    	Logger.info("============");
-	
+
+			String answer = "";
+			
 	    	// LLM for ChatGPT
-	    	String answer = llmQuery.chatLLM(prompt);
+			try{
+	    		answer = llmQuery.chatLLM(prompt);
+			} catch (Exception e) {
+				Logger.error("Error calling LLM: " + e.getMessage());
+				this.lastReplacement = "LLM GAVE NO SUGGESTIONS";
+			}
 	    	// END of LLM code
 	
 	    	// answer includes code enclosed in ```java   ....``` or ```....``` blocks
@@ -241,5 +250,9 @@ public class LLMReplaceStatement extends StatementEdit {
 	public String getLastReplacement() {
         return this.lastReplacement;
     }
+
+	public String getLastDestination() {
+		return this.destinationNode.toString();
+	}
 
 }

@@ -191,6 +191,7 @@ public abstract class LocalSearchSimple extends GP {
             Patch patch = neighbour(bestPatch);
             boolean toTest = false;
             String lastReplacement = "";
+            String lastDestination = "";
             Logger.info("Patch is: " + patch.toString());
             Logger.info("Original Patch is: " + origPatch.toString());
 
@@ -203,6 +204,7 @@ public abstract class LocalSearchSimple extends GP {
                     Edit lastEdit = patch.getEdits().get(patch.getEdits().size() - 1);
                     if (lastEdit instanceof LLMReplaceStatement llmEdit) {
                         lastReplacement = llmEdit.getLastReplacement();
+                        lastDestination = llmEdit.getLastDestination();
                     } else {
                         continue;
                     }
@@ -213,7 +215,8 @@ public abstract class LocalSearchSimple extends GP {
                     ProcessBuilder builder = new ProcessBuilder(
                         "python3",
                         "../gin/PatchCat/src/PatchCatGin.py",
-                        "--diff-text", lastReplacement.toString(),
+                        "--A-text", lastDestination,
+                        "--B-text", lastReplacement,
                         "--vectorizer-path", "../gin/PatchCat/src/running-model/vectorizer.pkl",
                         "--model-path", "../gin/PatchCat/src/running-model/model.pkl"
                     );           
@@ -227,9 +230,17 @@ public abstract class LocalSearchSimple extends GP {
                         new InputStreamReader(process.getInputStream())
                     );
 
-                    //Read the output from PatchCatGin to get the cluster number
+                    //Read the first line from PatchCatGin to get the cluster number
                     String line = reader.readLine();
                     int cluster = -1;
+
+                    // Read remaining lines (diff)
+                    List<String> diffLines = new ArrayList<>();
+
+                    while ((line = reader.readLine()) != null) {
+                        diffLines.add(line);
+                    }
+                    String diff = String.join("\n", diffLines);
 
                     Logger.info("Line is: " + line);
                     if (line != null && !line.isEmpty()) {
@@ -248,7 +259,7 @@ public abstract class LocalSearchSimple extends GP {
 
                     int exit = process.waitFor();
 
-                    implementClusterAction(action, className, methodName, tests, patch, i, cluster, lastReplacement);
+                    implementClusterAction(action, className, methodName, tests, patch, i, cluster, diff);
                     
                 } else { // Regular Local Search without PatchCat
                     // Calculate fitness
