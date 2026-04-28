@@ -23,6 +23,11 @@ public class Ollama4jLLMQuery implements LLMQuery {
 
     private static final String OLLAMA_SERVER = System.getenv("OLLAMA_SERVER");
     private static final String OLLAMA_API_KEY = System.getenv("OLLAMA_API_KEY");
+    private static final String SYSTEM_TEMPLATE =
+        "You are a top expert Java performance engineer. " +
+        "Your task is to rewrite code to be faster while preserving correctness. " +
+        "You have a strict time budget of %d seconds per request. " +
+        "Only output code, no explanations.";
 
     // c'tor
     public Ollama4jLLMQuery(String ollamaServerHost, String modelType) {
@@ -36,6 +41,10 @@ public class Ollama4jLLMQuery implements LLMQuery {
 	}
         ollamaAPI.setRequestTimeoutSeconds(LLMConfig.timeoutInSeconds);
         //ollamaAPI.setVerbose(true);
+    }
+
+    private String buildSystemPrompt() {
+        return String.format(SYSTEM_TEMPLATE, LLMConfig.timeoutInSeconds);
     }
 
     @Override
@@ -55,8 +64,11 @@ public class Ollama4jLLMQuery implements LLMQuery {
         try {
                 // code that might throw OllamaBaseException
                 OllamaGenerateRequest req = OllamaGenerateRequest.builder()
-					.withModel(this.modelType).withPrompt(prompt)
+					.withModel(this.modelType)
+                                        .withSystem(this.buildSystemPrompt()) // Will pull the current timeout setup
+                                        .withPrompt(prompt)
 //					.withContext("You are a Java Optimization Engine that creates a valid faster code")
+                                        .withKeepAlive("10m") // For performance, but not permenatly. Eventually will be released
 					.build();
                 OllamaResult result = ollamaAPI.generate(req, null);
                     //ollamaAPI.ask(modelType, prompt, new OptionsBuilder().build());
