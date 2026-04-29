@@ -211,6 +211,7 @@ public abstract class LocalSearchSimple extends GP {
                     
                     // Logger.info("Current patch diff is: " + diff);
                     Logger.info("Last replacement is: " + lastReplacement);
+                    Logger.info("Last destination is: " + lastDestination);
 
                     ProcessBuilder builder = new ProcessBuilder(
                         "python3",
@@ -231,17 +232,8 @@ public abstract class LocalSearchSimple extends GP {
                     );
 
                     //Read the first line from PatchCatGin to get the cluster number
-                    String line = reader.readLine();
                     int cluster = -1;
-
-                    // Read remaining lines (diff)
-                    List<String> diffLines = new ArrayList<>();
-
-                    while ((line = reader.readLine()) != null) {
-                        diffLines.add(line);
-                    }
-                    String diff = String.join("\n", diffLines);
-
+                    String line = reader.readLine();
                     Logger.info("Line is: " + line);
                     if (line != null && !line.isEmpty()) {
                         // Regex to capture digits inside [..], e.g. [13]
@@ -254,10 +246,19 @@ public abstract class LocalSearchSimple extends GP {
                             Logger.info("Cluster is: " + cluster);
                         }
                     }
-
                     String action = clusterAction(cluster);
 
+                    // Read remaining lines (diff)
+                    List<String> diffLines = new ArrayList<>();
+                    String tmpLine;
+
+                    while ((tmpLine = reader.readLine()) != null) {
+                        diffLines.add(tmpLine);
+                    }
+                    String diff = String.join("\n", diffLines);
+
                     int exit = process.waitFor();
+                    Logger.info("Python exit code: " + exit);
 
                     implementClusterAction(action, className, methodName, tests, patch, i, cluster, diff);
                     
