@@ -248,12 +248,13 @@ public class LLMReplaceStatement extends StatementEdit {
         return this.getClass().getCanonicalName() + " \"" + destinationFilename + "\":" + destinationStatement + "\nPrompt: !!!\n" + lastPrompt +  "\n!!! --> !!!\n" + lastReplacement + "\n!!!";
     }
 
-	public String getLastReplacement() {
+    public String getLastReplacement() {
         return this.lastReplacement;
     }
 
-	public String getLastDestination() {
-		return this.destinationNode.toString();
-	}
+    public String getLastDestination() {
+        //return this.destinationNode.toString();
+        return (this.destinationNode == null) ? "" : this.destinationNode.toString();
+    }
 
 }
