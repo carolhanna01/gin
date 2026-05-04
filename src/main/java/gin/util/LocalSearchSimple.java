@@ -226,6 +226,8 @@ public abstract class LocalSearchSimple extends GP {
                     // builder.redirectErrorStream(true);
                     
                     Process process = builder.start();
+                    int exitCode = process.waitFor();
+                    Logger.info("EXIT CODE = " + exitCode);
 
                     BufferedReader reader = new BufferedReader(
                         new InputStreamReader(process.getInputStream())
