@@ -29,6 +29,7 @@ import java.io.InputStreamReader;
 import java.io.IOException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.HashMap;
 
 /**
  * Method-based LocalSearchSimple search.
@@ -51,6 +52,14 @@ public abstract class LocalSearchSimple extends GP {
     private Double best = null;
     private Patch bestPatch = null;
 
+    Map<String, Integer> actionCounts = new HashMap<>(Map.of(
+        "skip", 0,
+        "throw", 0,
+        "regular", 0
+    ));
+
+    private Integer testSkipCount = 0;
+    
     public LocalSearchSimple(String[] args) {
         super(args);
         SetLLMedits();
@@ -132,6 +141,8 @@ public abstract class LocalSearchSimple extends GP {
         if (action == "C") {
             UnitTestResultSet results = new UnitTestResultSet(patch, "", null, new ArrayList<>(), null, "", null, new ArrayList<>()); 
             super.writePatchWithPatchCatInfo(iteration, iteration, results, methodName, null, 0, cluster, "C", diff);
+            actionCounts.put("throw", actionCounts.get("throw") + 1);
+            testSkipCount += tests.size();
         }
 
         // ACTION B - Proceed as normal
@@ -147,6 +158,7 @@ public abstract class LocalSearchSimple extends GP {
                 bestPatch = patch;
                 Logger.info("New best patch found: " + bestPatch.toString() + " with fitness: " + best);
             }
+            actionCounts.put("regular", actionCounts.get("regular") + 1);
         }
 
         // ACTION A- Skip testing and keep patch- we need to figure out how to do this
@@ -156,7 +168,11 @@ public abstract class LocalSearchSimple extends GP {
             super.writePatchWithPatchCatInfo(iteration, iteration, results, methodName, null, 0, cluster, "A", diff);
 
             bestPatch = patch;
+            actionCounts.put("skip", actionCounts.get("skip") + 1);
+            testSkipCount += tests.size();
         }
+        Logger.info("Current action counts: {}", actionCounts);
+        Logger.info("Tests skipped so far: {}", testSkipCount);
     }
 
     /*============== Implementation of abstract methods  ==============*/
