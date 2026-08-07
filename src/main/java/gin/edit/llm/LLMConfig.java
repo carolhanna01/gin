@@ -13,7 +13,7 @@ public class LLMConfig {
         		+ "```\n"
         		+ PromptTag.DESTINATION.withEscape()
         		+ "\n"
-        		+ "```\n")), 
+        		+ "```\n")),
 		
 		MEDIUM(new PromptTemplate("Give me " + PromptTag.COUNT.withEscape() + " different Java implementations of this method body:"
         		+ "```\n"
@@ -21,9 +21,9 @@ public class LLMConfig {
         		+ "\n"
         		+ "```\n"
         		+ "This code belongs to project " + PromptTag.PROJECT.withEscape() + ". "
-                + "Wrap all code in curly braces, if it is not already."
-                + "Do not include any method or class declarations."
-                + "label all code as java.")), 
+                + "Wrap all code in curly braces, if it is not already. "
+                + "Do not include any method or class declarations. "
+                + "label all code as java.")),
 		
 		DETAILED(new PromptTemplate("Give me " + PromptTag.COUNT.withEscape() + " different Java implementations of this method body:"
         		+ "```\n"
@@ -47,9 +47,9 @@ public class LLMConfig {
         		+ "		tempBuffers.set(temp);"
         		+ "	}"
         		+ "```\n"
-                + "Wrap all code in curly braces, if it is not already."
-                + "Do not include any method or class declarations."
-                + "label all code as java.")), 
+                + "Wrap all code in curly braces, if it is not already. "
+                + "Do not include any method or class declarations. "
+                + "label all code as java.")),
 
 
 		MASKED(new PromptTemplate("Please replace <<PLACEHOLDER>> sign in the function below with meaningfull implementation. \n"
@@ -60,7 +60,7 @@ public class LLMConfig {
 				+ "This code belongs to project " + PromptTag.PROJECT.withEscape() + ". "
 				+ "Wrap all code in curly braces, if it is not already. "
 				+ "Do not include any class declarations. "
-				+ "Label all code as java.")),;
+				+ "Label all code as java using ```java label.")),;
 		
 		
 		
@@ -77,7 +77,7 @@ public class LLMConfig {
     
     public static String modelType="OpenAI"; // Should be param from c'tor
 
-    public static long timeoutInSeconds = 30;
+    public static long timeoutInSeconds = 120;
     
     // default for langchain4j
     public static double temperature = 0.7;
@@ -91,7 +91,4 @@ public class LLMConfig {
     }
     
     public static String projectName = "";
-    
-    
-    
 }

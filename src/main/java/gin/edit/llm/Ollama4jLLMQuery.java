@@ -7,6 +7,7 @@ import io.github.ollama4j.utils.OptionsBuilder;
 import io.github.ollama4j.models.response.OllamaResult;
 import io.github.ollama4j.exceptions.OllamaException;
 import io.github.ollama4j.models.generate.OllamaGenerateRequest;
+import io.github.ollama4j.models.request.ThinkMode;
 
 //import io.github.amithkoujalgi.ollama4j.core.OllamaAPI;
 //import io.github.amithkoujalgi.ollama4j.core.models.OllamaResult;
@@ -27,7 +28,7 @@ public class Ollama4jLLMQuery implements LLMQuery {
         "You are a top expert Java performance engineer. " +
         "Your task is to rewrite code to be faster while preserving correctness. " +
         "You have a strict time budget of %d seconds per request. " +
-        "Only output code, no explanations.";
+        "Only output code in ```java section, no explanations.";
 
     // c'tor
     public Ollama4jLLMQuery(String ollamaServerHost, String modelType) {
@@ -62,6 +63,12 @@ public class Ollama4jLLMQuery implements LLMQuery {
     @Override
     public String chatLLM(String prompt) {
         try {
+
+                System.out.println(
+                    "[INFO] Ollama request: model=" + this.modelType
+                    + ", timeout=" + LLMConfig.timeoutInSeconds + "s"
+                    + ", promptLength=" + prompt.length()
+                );
                 // code that might throw OllamaBaseException
                 OllamaGenerateRequest req = OllamaGenerateRequest.builder()
 					.withModel(this.modelType)
@@ -69,6 +76,9 @@ public class Ollama4jLLMQuery implements LLMQuery {
                                         .withPrompt(prompt)
 //					.withContext("You are a Java Optimization Engine that creates a valid faster code")
                                         .withKeepAlive("10m") // For performance, but not permenatly. Eventually will be released
+                                        .withRaw(false)
+                                        .withThink(ThinkMode.DISABLED)
+                                        .withStreaming(false)
 					.build();
                 OllamaResult result = ollamaAPI.generate(req, null);
                     //ollamaAPI.ask(modelType, prompt, new OptionsBuilder().build());

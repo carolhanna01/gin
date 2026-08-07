@@ -104,7 +104,7 @@ public abstract class Sampler implements Serializable {
     protected String modelType = "OpenAI";
     
     @Argument(alias = "mo", description = "model timeout in seconds")
-    protected Integer modelTimeout = 30;
+    protected Integer modelTimeout = 120;
     
     @Argument(alias = "pt", description = "Prompt Type for LLM edits")
     protected PromptType llmPromptType = PromptType.MEDIUM;
