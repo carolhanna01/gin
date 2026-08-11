@@ -175,7 +175,7 @@ public class LLMReplaceStatement extends StatementEdit {
 	    		answer = llmQuery.chatLLM(prompt);
 			} catch (Exception e) {
 				Logger.error("Error calling LLM: " + e.getMessage());
-				this.lastReplacement = "LLM GAVE NO SUGGESTIONS";
+				this.lastReplacement = "LLM CALL THREW EXCEPTION";
 			}
 	    	// END of LLM code
 	
@@ -213,7 +213,7 @@ public class LLMReplaceStatement extends StatementEdit {
 	    		Logger.info("No replacements found. Response was:");
 	    		Logger.info(answer);
 	    		Logger.info("============");
-	    		this.lastReplacement = "LLM GAVE NO SUGGESTIONS";
+	    		this.lastReplacement = "LLM GAVE NO PARSEABLE SUGGESTIONS";
 	    	} else {
 	    		this.lastReplacement = replacementStrings.get(0);
 	    	}
