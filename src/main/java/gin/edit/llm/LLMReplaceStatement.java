@@ -175,30 +175,68 @@ public class LLMReplaceStatement extends StatementEdit {
 	    		answer = llmQuery.chatLLM(prompt);
 			} catch (Exception e) {
 				Logger.error("Error calling LLM: " + e.getMessage());
-				this.lastReplacement = "LLM CALL THREW EXCEPTION";
+				this.lastReplacement = "LLM CALL THREW EXCEPTION " + e.getMessage();
+				return Collections.emptyList();
 			}
 	    	// END of LLM code
+
+			if (answer == null) {
+				Logger.error("LLM returned null response");
+				this.lastReplacement = "LLM RETURNED NULL RESPONSE";
+				return Collections.emptyList();
+			}
+
+			Logger.info("============");
+			Logger.info("Raw LLM response:");
+			Logger.info(answer);
+			Logger.info("============");
 	
 	    	// answer includes code enclosed in ```java   ....``` or ```....``` blocks
 	    	// use regex to find all of these then parse into javaparser objects for return
-	    	Pattern pattern = Pattern.compile("```(?:java)(.*?)```", Pattern.DOTALL | Pattern.MULTILINE);
+			Pattern pattern = Pattern.compile(
+					"```(?:\\s*java)?\\s*(.*?)```",
+					Pattern.CASE_INSENSITIVE | Pattern.DOTALL
+			);
 	    	Matcher matcher = pattern.matcher(answer);
 	
 	    	// now parse the strings return by LLM into JavaParser Statements
-	    	while (matcher.find()) {
-	    		String str = matcher.group(1);
-	
-	    		try {
-	    			Statement stmt;
-	    			stmt = StaticJavaParser.parseBlock(str);
-	    			replacementStrings.add(str);
-	    			replacementStatements.add(stmt);
-	    		}
-	    		catch (ParseProblemException e) {
-	    			continue;
-	    		}
-	
-	    	}
+			int candidatesFound = 0;
+
+			while (matcher.find()) {
+				candidatesFound++;
+
+				String str = cleanCandidate(matcher.group(1));
+
+				List<Statement> parsed = parseCandidate(str);
+
+				if (parsed.isEmpty()) {
+					Logger.info("Failed to parse LLM suggestion:");
+					Logger.info(str);
+				} else {
+					for (Statement stmt : parsed) {
+						replacementStrings.add(stmt.toString());
+						replacementStatements.add(stmt);
+					}
+				}
+			}
+
+			// no code fences? try assuming that only code is returned...
+			if (candidatesFound == 0 && answer != null && !answer.isBlank()) {
+				Logger.info("No code fences found; trying whole LLM response as Java.");
+
+				String str = cleanCandidate(answer);
+				List<Statement> parsed = parseCandidate(str);
+
+				for (Statement stmt : parsed) {
+					replacementStrings.add(stmt.toString());
+					replacementStatements.add(stmt);
+				}
+			}
+
+			Logger.info("Extracted " + candidatesFound
+					+ " code fence(s); "
+					+ replacementStatements.size()
+					+ " replacement block(s) parsed successfully.");
 	
 	    	int i = 1;
 	    	for (String s : replacementStrings) {
@@ -210,10 +248,12 @@ public class LLMReplaceStatement extends StatementEdit {
 	
 	    	if (replacementStrings.isEmpty()) {
 	    		Logger.info("============");
-	    		Logger.info("No replacements found. Response was:");
+				String logtag = "TS" + System.nanoTime();
+				Logger.info(logtag);
+	    		Logger.info("No parseable replacements found. Response was:");
 	    		Logger.info(answer);
 	    		Logger.info("============");
-	    		this.lastReplacement = "LLM GAVE NO PARSEABLE SUGGESTIONS";
+	    		this.lastReplacement = "LLM GAVE NO PARSEABLE SUGGESTIONS CHECK LOG FOR " + logtag;
 	    	} else {
 	    		this.lastReplacement = replacementStrings.get(0);
 	    	}
@@ -236,7 +276,8 @@ public class LLMReplaceStatement extends StatementEdit {
     		try {
     			variantSourceFiles.add(sf.replaceNode(destinationStatement, s));
     		} catch (ClassCastException e) { // JavaParser sometimes throws this if the statements don't match
-    			// do nothing...
+				Logger.info("Parsed replacement could not replace destination node: "
+						+ e.getMessage());
     		}
     	}
 
@@ -256,5 +297,144 @@ public class LLMReplaceStatement extends StatementEdit {
         //return this.destinationNode.toString();
         return (this.destinationNode == null) ? "" : this.destinationNode.toString();
     }
+
+
+
+	private static List<Statement> parseCandidate(String str) {
+
+		String code = cleanCandidate(str);
+
+		// Normal/common case
+		try {
+			return Collections.singletonList(
+					StaticJavaParser.parseBlock(code)
+			);
+		} catch (ParseProblemException ignored) {
+		}
+
+		// Several alternatives in one code fence
+		return parseMultipleBlocks(code);
+	}
+
+	private static String cleanCandidate(String str) {
+		String cleaned = str.trim();
+
+		// Some LLMs redundantly put "java" on the first line
+		// inside an already-labelled ```java code fence.
+		cleaned = cleaned.replaceFirst("(?i)^java\\s*\\R", "");
+
+		return cleaned.trim();
+	}
+
+	private static List<Statement> parseMultipleBlocks(String str) {
+		List<Statement> statements = new ArrayList<>();
+
+		int depth = 0;
+		int blockStart = -1;
+
+		boolean inString = false;
+		boolean inChar = false;
+		boolean inLineComment = false;
+		boolean inBlockComment = false;
+		boolean escaped = false;
+
+		for (int i = 0; i < str.length(); i++) {
+			char c = str.charAt(i);
+			char next = (i + 1 < str.length()) ? str.charAt(i + 1) : '\0';
+
+			// Comments
+			if (inLineComment) {
+				if (c == '\n') {
+					inLineComment = false;
+				}
+				continue;
+			}
+
+			if (inBlockComment) {
+				if (c == '*' && next == '/') {
+					inBlockComment = false;
+					i++;
+				}
+				continue;
+			}
+
+			// Strings / chars
+			if (inString) {
+				if (escaped) {
+					escaped = false;
+				} else if (c == '\\') {
+					escaped = true;
+				} else if (c == '"') {
+					inString = false;
+				}
+				continue;
+			}
+
+			if (inChar) {
+				if (escaped) {
+					escaped = false;
+				} else if (c == '\\') {
+					escaped = true;
+				} else if (c == '\'') {
+					inChar = false;
+				}
+				continue;
+			}
+
+			if (c == '/' && next == '/') {
+				inLineComment = true;
+				i++;
+				continue;
+			}
+
+			if (c == '/' && next == '*') {
+				inBlockComment = true;
+				i++;
+				continue;
+			}
+
+			if (c == '"') {
+				inString = true;
+				continue;
+			}
+
+			if (c == '\'') {
+				inChar = true;
+				continue;
+			}
+
+			// Braces
+			if (c == '{') {
+				if (depth == 0) {
+					blockStart = i;
+				}
+				depth++;
+			} else if (c == '}') {
+				if (depth > 0) {
+					depth--;
+
+					if (depth == 0 && blockStart >= 0) {
+						String candidate =
+								str.substring(blockStart, i + 1).trim();
+
+						try {
+							statements.add(
+									StaticJavaParser.parseBlock(candidate)
+							);
+						} catch (ParseProblemException e) {
+							Logger.info(
+									"Ignoring malformed block within multi-block response:"
+							);
+							Logger.info(candidate);
+						}
+
+						blockStart = -1;
+					}
+				}
+			}
+		}
+
+		return statements;
+	}
 
 }
