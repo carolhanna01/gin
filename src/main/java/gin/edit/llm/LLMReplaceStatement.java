@@ -130,6 +130,7 @@ public class LLMReplaceStatement extends StatementEdit {
 		this.destinationNode = destination;
 
     	if (destination == null) {
+			Logger.info("Couldn't apply as destination is null");
     		return Collections.singletonList(sf); // targeting a deleted location just does nothing.
     	}
 

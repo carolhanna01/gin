@@ -35,6 +35,7 @@ public class LLMMaskedStatement extends StatementEdit{
     private static final long serialVersionUID = 1112502387236768004L;
     public String destinationFilename;
     public int destinationStatement;
+    public Node destinationNode;
 
     private PromptTemplate promptTemplate;
 
@@ -82,7 +83,9 @@ public class LLMMaskedStatement extends StatementEdit{
 
     public List<SourceFile> applyMultiple(SourceFile sourceFile, int count, Map<PromptTemplate.PromptTag,String> tagReplacements ){
         SourceFileTree sf = (SourceFileTree) sourceFile;
-        
+
+        Node destination = sf.getNode(destinationStatement);
+        this.destinationNode = destination;
 
         Statement statementToMask = drawStatementFromSourceFile(sf, (rng != null ? rng : new Random()));
         Logger.info( "Statement to mask: " + statementToMask.toString());
@@ -258,5 +261,14 @@ public class LLMMaskedStatement extends StatementEdit{
     @Override
     public String toString() {
         return this.getClass().getCanonicalName() + " \"" + destinationFilename + "\":" + destinationStatement + "\nPrompt: !!!\n" + lastPrompt +  "\n!!! --> !!!\n" + lastReplacement + "\n!!!";
+    }
+
+    public String getLastReplacement() {
+        return this.lastReplacement;
+    }
+
+    public String getLastDestination() {
+        //return this.destinationNode.toString();
+        return (this.destinationNode == null) ? "" : this.destinationNode.toString();
     }
 }

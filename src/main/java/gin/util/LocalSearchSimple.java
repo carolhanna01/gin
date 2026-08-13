@@ -215,13 +215,20 @@ public abstract class LocalSearchSimple extends GP {
                 // Support for PatchCat Integration
                 if (Boolean.TRUE.equals(patchCat)) {
                     Logger.info("Running PatchCat");
+                    Logger.info("Patch: " + patch);
 
                     patch.apply();
                     Edit lastEdit = patch.getEdits().get(patch.getEdits().size() - 1);
                     if (lastEdit instanceof LLMReplaceStatement llmEdit) {
+                        Logger.info("Found LLMReplaceStatement");
+                        lastReplacement = llmEdit.getLastReplacement();
+                        lastDestination = llmEdit.getLastDestination();
+                    } else if (lastEdit instanceof LLMMaskedStatement llmEdit) {
+                        Logger.info("Found LLMMaskedStatement");
                         lastReplacement = llmEdit.getLastReplacement();
                         lastDestination = llmEdit.getLastDestination();
                     } else {
+                        Logger.info("Found unsupported edit: " + lastEdit);
                         continue;
                     }
                     
