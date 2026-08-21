@@ -46,6 +46,7 @@ public class LLMReplaceStatement extends StatementEdit {
     /**fairly rubbish approach to having something meaningful for the toString*/
     private String lastReplacement;
     private String lastPrompt;
+	private boolean applied;
     
     /**
      * true if this instance was constructed by a call to fromString()
@@ -73,6 +74,7 @@ public class LLMReplaceStatement extends StatementEdit {
 
         lastReplacement = "NOT YET APPLIED";
         lastPrompt = "NOT YET APPLIED";
+		applied = false;
         recreatedFromString = false;
     }
 
@@ -85,6 +87,7 @@ public class LLMReplaceStatement extends StatementEdit {
         this.destinationStatement = destinationStatement;
 
         this.lastReplacement = "NOT YET APPLIED";
+		applied = false;
         this.recreatedFromString = false;
     }
 
@@ -107,6 +110,7 @@ public class LLMReplaceStatement extends StatementEdit {
         LLMReplaceStatement rval = new LLMReplaceStatement(destFilename, destination);
         rval.lastReplacement = tokens1[3];
         rval.lastPrompt = tokens1[1];
+		rval.applied = true; // might want to check the strong to be sure this is true...
         rval.recreatedFromString = true;
         return rval;
     }
@@ -123,14 +127,15 @@ public class LLMReplaceStatement extends StatementEdit {
     }
 
     public List<SourceFile> applyMultiple(SourceFile sourceFile, int count, Map<PromptTemplate.PromptTag,String> tagReplacements) {
+        SourceFileTree sf = (SourceFileTree) sourceFile;
 
-    	SourceFileTree sf = (SourceFileTree) sourceFile;
-
-    	Node destination = sf.getNode(destinationStatement);
-		this.destinationNode = destination;
+        Node destination = sf.getNode(destinationStatement);
+        this.destinationNode = destination;
 
     	if (destination == null) {
 			Logger.info("Couldn't apply as destination is null");
+			this.lastReplacement = "NOT APPLIED AS DESTINATION IS NULL";
+			applied = false;
     		return Collections.singletonList(sf); // targeting a deleted location just does nothing.
     	}
 
@@ -177,6 +182,7 @@ public class LLMReplaceStatement extends StatementEdit {
 			} catch (Exception e) {
 				Logger.error("Error calling LLM: " + e.getMessage());
 				this.lastReplacement = "LLM CALL THREW EXCEPTION " + e.getMessage();
+				applied = false;
 				return Collections.emptyList();
 			}
 	    	// END of LLM code
@@ -184,6 +190,7 @@ public class LLMReplaceStatement extends StatementEdit {
 			if (answer == null) {
 				Logger.error("LLM returned null response");
 				this.lastReplacement = "LLM RETURNED NULL RESPONSE";
+				applied = false;
 				return Collections.emptyList();
 			}
 
@@ -255,8 +262,10 @@ public class LLMReplaceStatement extends StatementEdit {
 	    		Logger.info(answer);
 	    		Logger.info("============");
 	    		this.lastReplacement = "LLM GAVE NO PARSEABLE SUGGESTIONS CHECK LOG FOR " + logtag;
+				applied = false;
 	    	} else {
 	    		this.lastReplacement = replacementStrings.get(0);
+				applied = true;
 	    	}
 	    } else {
 	    	try {
@@ -290,7 +299,11 @@ public class LLMReplaceStatement extends StatementEdit {
         return this.getClass().getCanonicalName() + " \"" + destinationFilename + "\":" + destinationStatement + "\nPrompt: !!!\n" + lastPrompt +  "\n!!! --> !!!\n" + lastReplacement + "\n!!!";
     }
 
-    public String getLastReplacement() {
+	public boolean isApplied() {
+		return applied;
+	}
+
+	public String getLastReplacement() {
         return this.lastReplacement;
     }
 

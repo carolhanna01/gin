@@ -218,17 +218,37 @@ public abstract class LocalSearchSimple extends GP {
                     Logger.info("Patch: " + patch);
 
                     patch.apply();
-                    Edit lastEdit = patch.getEdits().get(patch.getEdits().size() - 1);
-                    if (lastEdit instanceof LLMReplaceStatement llmEdit) {
+
+                    // patchcat uses a diff to choose accept/reject/test actions
+                    // for this to work, we look at the
+                    // note: it may be better to simply remove the edits that fail because of this
+                    // as they add nothing but bloat!
+                    Edit lastAppliedEdit = null;
+                    Logger.info("Patch contains " + patch.getEdits().size() + "edits...");
+                    for (int editIndex = patch.getEdits().size() - 1; (editIndex >= 0) && (lastAppliedEdit == null); editIndex--) {
+                        if (patch.getEdits().get(editIndex) instanceof LLMReplaceStatement llmEdit) {
+                            Logger.info("Checking edit index " + editIndex + ": " + patch.getEdits().get(editIndex));
+                            if (llmEdit.isApplied()) {
+                                Logger.info("Is applied");
+                                lastAppliedEdit = patch.getEdits().get(editIndex);
+                            } else {
+                                Logger.info("Is NOT applied");
+                            }
+                        } else {
+                            Logger.info("Using last edit:" + patch.getEdits().get(editIndex));
+                            lastAppliedEdit = patch.getEdits().get(editIndex);
+                        }
+                    }
+                    if (lastAppliedEdit instanceof LLMReplaceStatement llmEdit) {
                         Logger.info("Found LLMReplaceStatement");
                         lastReplacement = llmEdit.getLastReplacement();
                         lastDestination = llmEdit.getLastDestination();
-                    } else if (lastEdit instanceof LLMMaskedStatement llmEdit) {
+                    } else if (lastAppliedEdit instanceof LLMMaskedStatement llmEdit) {
                         Logger.info("Found LLMMaskedStatement");
                         lastReplacement = llmEdit.getLastReplacement();
                         lastDestination = llmEdit.getLastDestination();
                     } else {
-                        Logger.info("Found unsupported edit: " + lastEdit);
+                        Logger.info("Found unsupported edit: " + lastAppliedEdit);
                         continue;
                     }
                     

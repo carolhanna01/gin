@@ -41,6 +41,12 @@ public class LLMMaskedStatement extends StatementEdit{
 
     private String lastReplacement;
     private String lastPrompt;
+    
+    /**
+     * true if this instance was constructed by a call to fromString()
+     * In this case, we won't run the LLM when calling apply, but will use the value of lastReplacement instead
+     */
+    private boolean recreatedFromString;
 
     private Random rng = null;
 
@@ -57,6 +63,7 @@ public class LLMMaskedStatement extends StatementEdit{
 
         lastReplacement = "NOT YET APPLIED";
         lastPrompt = "NOT YET APPLIED";
+        recreatedFromString = false;
     }
 
     public LLMMaskedStatement(SourceFile sourceFile, Random rng) {
@@ -68,6 +75,30 @@ public class LLMMaskedStatement extends StatementEdit{
         this.destinationStatement = destinationStatement;
 
         this.lastReplacement = "NOT YET APPLIED";
+        this.recreatedFromString = false;
+    }
+
+    public static Edit fromString(String description) {
+    	
+    	// the following will give us 5 tokens:
+    	// gin.edit.llm.LLMReplaceStatement src/main/java/org/apache/commons/net/smtp/SimpleSMTPHeader.java:331\nPrompt:
+    	// (prompt)
+    	// --->
+    	// (replacement)
+    	// ""
+    	String[] tokens1 = description.split("!!!", -1); 
+    	
+    	// split the first of these to get the filename and statement ID
+    	String[] tokens2 = tokens1[0].split("\\s+(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", -1);
+    	String[] destTokens = tokens2[1].split(":");
+        String destFilename = destTokens[0].replace("\"", "");
+        int destination = Integer.parseInt(destTokens[1]);
+        
+        LLMMaskedStatement rval = new LLMMaskedStatement(destFilename, destination);
+        rval.lastReplacement = tokens1[3];
+        rval.lastPrompt = tokens1[1];
+        rval.recreatedFromString = true;
+        return rval;
     }
 
     @Override
@@ -81,7 +112,7 @@ public class LLMMaskedStatement extends StatementEdit{
     	}
     }
 
-    public List<SourceFile> applyMultiple(SourceFile sourceFile, int count, Map<PromptTemplate.PromptTag,String> tagReplacements ){
+    public List<SourceFile> applyMultiple(SourceFile sourceFile, int count, Map<PromptTemplate.PromptTag,String> tagReplacements) {
         SourceFileTree sf = (SourceFileTree) sourceFile;
 
         Node destination = sf.getNode(destinationStatement);
