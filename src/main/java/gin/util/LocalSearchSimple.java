@@ -55,7 +55,8 @@ public abstract class LocalSearchSimple extends GP {
     Map<String, Integer> actionCounts = new HashMap<>(Map.of(
         "skip", 0,
         "throw", 0,
-        "regular", 0
+        "regular", 0,
+        "noChange", 0
     ));
 
     private Integer testSkipCount = 0;
@@ -129,6 +130,7 @@ public abstract class LocalSearchSimple extends GP {
             case 16:
                 return "B";
             case 1:
+                return "D";
             case 2:
             case 6:
                 return "C";
@@ -137,6 +139,14 @@ public abstract class LocalSearchSimple extends GP {
     }
 
     public void implementClusterAction(String action, String className, String methodName, List<UnitTest> tests, Patch patch, int iteration, int cluster, String diff) {
+        // ACTION D - No Change - throw away
+        if (action == "D") {
+            UnitTestResultSet results = new UnitTestResultSet(patch, "", null, new ArrayList<>(), null, "", null, new ArrayList<>()); 
+            super.writePatchWithPatchCatInfo(iteration, iteration, results, methodName, null, 0, cluster, "D", diff);
+            actionCounts.put("noChange", actionCounts.get("noChange") + 1);
+            testSkipCount += tests.size();
+        }
+
         // ACTION C - Throw away patch
         if (action == "C") {
             UnitTestResultSet results = new UnitTestResultSet(patch, "", null, new ArrayList<>(), null, "", null, new ArrayList<>()); 
