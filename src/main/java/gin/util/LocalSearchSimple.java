@@ -12,6 +12,8 @@ import gin.test.UnitTestResult;
 import gin.test.UnitTestResultSet;
 import org.pmw.tinylog.Logger;
 
+import gin.edit.llm.LLMConfig;
+
 import com.fasterxml.jackson.annotation.JsonTypeInfo.None;
 import com.sampullara.cli.Argument;
 
@@ -272,7 +274,8 @@ public abstract class LocalSearchSimple extends GP {
                         "--A-text", lastDestination,
                         "--B-text", lastReplacement,
                         "--vectorizer-path", "../gin/PatchCat/src/running-model/vectorizer.pkl",
-                        "--model-path", "../gin/PatchCat/src/running-model/model.pkl"
+                        "--model-path", "../gin/PatchCat/src/running-model/model.pkl",
+                        "--ollama-model", LLMConfig.modelType.toString()
                     );           
                     
                     builder.environment().put("PYTHONUNBUFFERED", "1");
