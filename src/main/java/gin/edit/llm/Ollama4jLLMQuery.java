@@ -19,8 +19,8 @@ import io.github.ollama4j.models.request.ThinkMode;
 import gin.edit.llm.LLMQuery;
 
 public class Ollama4jLLMQuery implements LLMQuery {
-    private Ollama ollamaAPI;
-    private String modelType;
+    private final Ollama ollamaAPI;
+    private final String modelType;
 
     private static final String OLLAMA_SERVER = System.getenv("OLLAMA_SERVER");
     private static final String OLLAMA_API_KEY = System.getenv("OLLAMA_API_KEY");
@@ -68,6 +68,11 @@ public class Ollama4jLLMQuery implements LLMQuery {
                     "[INFO] Ollama request: model=" + this.modelType
                     + ", timeout=" + LLMConfig.timeoutInSeconds + "s"
                     + ", promptLength=" + prompt.length()
+                );
+                System.out.println("[INFO] ollamaAPI=" + ollamaAPI);
+                System.out.println(
+                    "[INFO] ollamaAPI class=" + ollamaAPI.getClass().getName()
+                    + ", instance=" + System.identityHashCode(ollamaAPI)
                 );
                 // code that might throw OllamaBaseException
                 OllamaGenerateRequest req = OllamaGenerateRequest.builder()

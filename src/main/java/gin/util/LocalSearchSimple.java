@@ -12,6 +12,8 @@ import gin.test.UnitTestResult;
 import gin.test.UnitTestResultSet;
 import org.pmw.tinylog.Logger;
 
+import gin.edit.llm.LLMConfig;
+
 import com.fasterxml.jackson.annotation.JsonTypeInfo.None;
 import com.sampullara.cli.Argument;
 
@@ -55,7 +57,8 @@ public abstract class LocalSearchSimple extends GP {
     Map<String, Integer> actionCounts = new HashMap<>(Map.of(
         "skip", 0,
         "throw", 0,
-        "regular", 0
+        "regular", 0,
+        "noChange", 0
     ));
 
     private Integer testSkipCount = 0;
@@ -129,6 +132,7 @@ public abstract class LocalSearchSimple extends GP {
             case 16:
                 return "B";
             case 1:
+                return "D";
             case 2:
             case 6:
                 return "C";
@@ -137,6 +141,14 @@ public abstract class LocalSearchSimple extends GP {
     }
 
     public void implementClusterAction(String action, String className, String methodName, List<UnitTest> tests, Patch patch, int iteration, int cluster, String diff) {
+        // ACTION D - No Change - throw away
+        if (action == "D") {
+            UnitTestResultSet results = new UnitTestResultSet(patch, "", null, new ArrayList<>(), null, "", null, new ArrayList<>()); 
+            super.writePatchWithPatchCatInfo(iteration, iteration, results, methodName, null, 0, cluster, "D", diff);
+            actionCounts.put("noChange", actionCounts.get("noChange") + 1);
+            testSkipCount += tests.size();
+        }
+
         // ACTION C - Throw away patch
         if (action == "C") {
             UnitTestResultSet results = new UnitTestResultSet(patch, "", null, new ArrayList<>(), null, "", null, new ArrayList<>()); 
@@ -215,13 +227,40 @@ public abstract class LocalSearchSimple extends GP {
                 // Support for PatchCat Integration
                 if (Boolean.TRUE.equals(patchCat)) {
                     Logger.info("Running PatchCat");
+                    Logger.info("Patch: " + patch);
 
                     patch.apply();
-                    Edit lastEdit = patch.getEdits().get(patch.getEdits().size() - 1);
-                    if (lastEdit instanceof LLMReplaceStatement llmEdit) {
+
+                    // patchcat uses a diff to choose accept/reject/test actions
+                    // for this to work, we look at the
+                    // note: it may be better to simply remove the edits that fail because of this
+                    // as they add nothing but bloat!
+                    Edit lastAppliedEdit = null;
+                    Logger.info("Patch contains " + patch.getEdits().size() + "edits...");
+                    for (int editIndex = patch.getEdits().size() - 1; (editIndex >= 0) && (lastAppliedEdit == null); editIndex--) {
+                        if (patch.getEdits().get(editIndex) instanceof LLMReplaceStatement llmEdit) {
+                            Logger.info("Checking edit index " + editIndex + ": " + patch.getEdits().get(editIndex));
+                            if (llmEdit.isApplied()) {
+                                Logger.info("Is applied");
+                                lastAppliedEdit = patch.getEdits().get(editIndex);
+                            } else {
+                                Logger.info("Is NOT applied");
+                            }
+                        } else {
+                            Logger.info("Using last edit:" + patch.getEdits().get(editIndex));
+                            lastAppliedEdit = patch.getEdits().get(editIndex);
+                        }
+                    }
+                    if (lastAppliedEdit instanceof LLMReplaceStatement llmEdit) {
+                        Logger.info("Found LLMReplaceStatement");
+                        lastReplacement = llmEdit.getLastReplacement();
+                        lastDestination = llmEdit.getLastDestination();
+                    } else if (lastAppliedEdit instanceof LLMMaskedStatement llmEdit) {
+                        Logger.info("Found LLMMaskedStatement");
                         lastReplacement = llmEdit.getLastReplacement();
                         lastDestination = llmEdit.getLastDestination();
                     } else {
+                        Logger.info("Found unsupported edit: " + lastAppliedEdit);
                         continue;
                     }
                     
@@ -235,7 +274,8 @@ public abstract class LocalSearchSimple extends GP {
                         "--A-text", lastDestination,
                         "--B-text", lastReplacement,
                         "--vectorizer-path", "../gin/PatchCat/src/running-model/vectorizer.pkl",
-                        "--model-path", "../gin/PatchCat/src/running-model/model.pkl"
+                        "--model-path", "../gin/PatchCat/src/running-model/model.pkl",
+                        "--ollama-model", LLMConfig.modelType.toString()
                     );           
                     
                     builder.environment().put("PYTHONUNBUFFERED", "1");

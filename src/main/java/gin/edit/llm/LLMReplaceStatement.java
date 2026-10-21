@@ -46,6 +46,7 @@ public class LLMReplaceStatement extends StatementEdit {
     /**fairly rubbish approach to having something meaningful for the toString*/
     private String lastReplacement;
     private String lastPrompt;
+	private boolean applied;
     
     /**
      * true if this instance was constructed by a call to fromString()
@@ -73,6 +74,7 @@ public class LLMReplaceStatement extends StatementEdit {
 
         lastReplacement = "NOT YET APPLIED";
         lastPrompt = "NOT YET APPLIED";
+		applied = false;
         recreatedFromString = false;
     }
 
@@ -85,6 +87,7 @@ public class LLMReplaceStatement extends StatementEdit {
         this.destinationStatement = destinationStatement;
 
         this.lastReplacement = "NOT YET APPLIED";
+		applied = false;
         this.recreatedFromString = false;
     }
 
@@ -107,6 +110,7 @@ public class LLMReplaceStatement extends StatementEdit {
         LLMReplaceStatement rval = new LLMReplaceStatement(destFilename, destination);
         rval.lastReplacement = tokens1[3];
         rval.lastPrompt = tokens1[1];
+		rval.applied = true; // might want to check the strong to be sure this is true...
         rval.recreatedFromString = true;
         return rval;
     }
@@ -123,13 +127,15 @@ public class LLMReplaceStatement extends StatementEdit {
     }
 
     public List<SourceFile> applyMultiple(SourceFile sourceFile, int count, Map<PromptTemplate.PromptTag,String> tagReplacements) {
+        SourceFileTree sf = (SourceFileTree) sourceFile;
 
-    	SourceFileTree sf = (SourceFileTree) sourceFile;
-
-    	Node destination = sf.getNode(destinationStatement);
-		this.destinationNode = destination;
+        Node destination = sf.getNode(destinationStatement);
+        this.destinationNode = destination;
 
     	if (destination == null) {
+			Logger.info("Couldn't apply as destination is null");
+			this.lastReplacement = "NOT APPLIED AS DESTINATION IS NULL";
+			applied = false;
     		return Collections.singletonList(sf); // targeting a deleted location just does nothing.
     	}
 
@@ -175,30 +181,70 @@ public class LLMReplaceStatement extends StatementEdit {
 	    		answer = llmQuery.chatLLM(prompt);
 			} catch (Exception e) {
 				Logger.error("Error calling LLM: " + e.getMessage());
-				this.lastReplacement = "LLM GAVE NO SUGGESTIONS";
+				this.lastReplacement = "LLM CALL THREW EXCEPTION " + e.getMessage();
+				applied = false;
+				return Collections.emptyList();
 			}
 	    	// END of LLM code
+
+			if (answer == null) {
+				Logger.error("LLM returned null response");
+				this.lastReplacement = "LLM RETURNED NULL RESPONSE";
+				applied = false;
+				return Collections.emptyList();
+			}
+
+			Logger.info("============");
+			Logger.info("Raw LLM response:");
+			Logger.info(answer);
+			Logger.info("============");
 	
 	    	// answer includes code enclosed in ```java   ....``` or ```....``` blocks
 	    	// use regex to find all of these then parse into javaparser objects for return
-	    	Pattern pattern = Pattern.compile("```(?:java)(.*?)```", Pattern.DOTALL | Pattern.MULTILINE);
+			Pattern pattern = Pattern.compile(
+					"```(?:\\s*java)?\\s*(.*?)```",
+					Pattern.CASE_INSENSITIVE | Pattern.DOTALL
+			);
 	    	Matcher matcher = pattern.matcher(answer);
 	
 	    	// now parse the strings return by LLM into JavaParser Statements
-	    	while (matcher.find()) {
-	    		String str = matcher.group(1);
-	
-	    		try {
-	    			Statement stmt;
-	    			stmt = StaticJavaParser.parseBlock(str);
-	    			replacementStrings.add(str);
-	    			replacementStatements.add(stmt);
-	    		}
-	    		catch (ParseProblemException e) {
-	    			continue;
-	    		}
-	
-	    	}
+			int candidatesFound = 0;
+
+			while (matcher.find()) {
+				candidatesFound++;
+
+				String str = cleanCandidate(matcher.group(1));
+
+				List<Statement> parsed = parseCandidate(str);
+
+				if (parsed.isEmpty()) {
+					Logger.info("Failed to parse LLM suggestion:");
+					Logger.info(str);
+				} else {
+					for (Statement stmt : parsed) {
+						replacementStrings.add(stmt.toString());
+						replacementStatements.add(stmt);
+					}
+				}
+			}
+
+			// no code fences? try assuming that only code is returned...
+			if (candidatesFound == 0 && answer != null && !answer.isBlank()) {
+				Logger.info("No code fences found; trying whole LLM response as Java.");
+
+				String str = cleanCandidate(answer);
+				List<Statement> parsed = parseCandidate(str);
+
+				for (Statement stmt : parsed) {
+					replacementStrings.add(stmt.toString());
+					replacementStatements.add(stmt);
+				}
+			}
+
+			Logger.info("Extracted " + candidatesFound
+					+ " code fence(s); "
+					+ replacementStatements.size()
+					+ " replacement block(s) parsed successfully.");
 	
 	    	int i = 1;
 	    	for (String s : replacementStrings) {
@@ -210,12 +256,16 @@ public class LLMReplaceStatement extends StatementEdit {
 	
 	    	if (replacementStrings.isEmpty()) {
 	    		Logger.info("============");
-	    		Logger.info("No replacements found. Response was:");
+				String logtag = "TS" + System.nanoTime();
+				Logger.info(logtag);
+	    		Logger.info("No parseable replacements found. Response was:");
 	    		Logger.info(answer);
 	    		Logger.info("============");
-	    		this.lastReplacement = "LLM GAVE NO SUGGESTIONS";
+	    		this.lastReplacement = "LLM GAVE NO PARSEABLE SUGGESTIONS CHECK LOG FOR " + logtag;
+				applied = false;
 	    	} else {
 	    		this.lastReplacement = replacementStrings.get(0);
+				applied = true;
 	    	}
 	    } else {
 	    	try {
@@ -236,7 +286,8 @@ public class LLMReplaceStatement extends StatementEdit {
     		try {
     			variantSourceFiles.add(sf.replaceNode(destinationStatement, s));
     		} catch (ClassCastException e) { // JavaParser sometimes throws this if the statements don't match
-    			// do nothing...
+				Logger.info("Parsed replacement could not replace destination node: "
+						+ e.getMessage());
     		}
     	}
 
@@ -248,7 +299,11 @@ public class LLMReplaceStatement extends StatementEdit {
         return this.getClass().getCanonicalName() + " \"" + destinationFilename + "\":" + destinationStatement + "\nPrompt: !!!\n" + lastPrompt +  "\n!!! --> !!!\n" + lastReplacement + "\n!!!";
     }
 
-    public String getLastReplacement() {
+	public boolean isApplied() {
+		return applied;
+	}
+
+	public String getLastReplacement() {
         return this.lastReplacement;
     }
 
@@ -256,5 +311,144 @@ public class LLMReplaceStatement extends StatementEdit {
         //return this.destinationNode.toString();
         return (this.destinationNode == null) ? "" : this.destinationNode.toString();
     }
+
+
+
+	private static List<Statement> parseCandidate(String str) {
+
+		String code = cleanCandidate(str);
+
+		// Normal/common case
+		try {
+			return Collections.singletonList(
+					StaticJavaParser.parseBlock(code)
+			);
+		} catch (ParseProblemException ignored) {
+		}
+
+		// Several alternatives in one code fence
+		return parseMultipleBlocks(code);
+	}
+
+	private static String cleanCandidate(String str) {
+		String cleaned = str.trim();
+
+		// Some LLMs redundantly put "java" on the first line
+		// inside an already-labelled ```java code fence.
+		cleaned = cleaned.replaceFirst("(?i)^java\\s*\\R", "");
+
+		return cleaned.trim();
+	}
+
+	private static List<Statement> parseMultipleBlocks(String str) {
+		List<Statement> statements = new ArrayList<>();
+
+		int depth = 0;
+		int blockStart = -1;
+
+		boolean inString = false;
+		boolean inChar = false;
+		boolean inLineComment = false;
+		boolean inBlockComment = false;
+		boolean escaped = false;
+
+		for (int i = 0; i < str.length(); i++) {
+			char c = str.charAt(i);
+			char next = (i + 1 < str.length()) ? str.charAt(i + 1) : '\0';
+
+			// Comments
+			if (inLineComment) {
+				if (c == '\n') {
+					inLineComment = false;
+				}
+				continue;
+			}
+
+			if (inBlockComment) {
+				if (c == '*' && next == '/') {
+					inBlockComment = false;
+					i++;
+				}
+				continue;
+			}
+
+			// Strings / chars
+			if (inString) {
+				if (escaped) {
+					escaped = false;
+				} else if (c == '\\') {
+					escaped = true;
+				} else if (c == '"') {
+					inString = false;
+				}
+				continue;
+			}
+
+			if (inChar) {
+				if (escaped) {
+					escaped = false;
+				} else if (c == '\\') {
+					escaped = true;
+				} else if (c == '\'') {
+					inChar = false;
+				}
+				continue;
+			}
+
+			if (c == '/' && next == '/') {
+				inLineComment = true;
+				i++;
+				continue;
+			}
+
+			if (c == '/' && next == '*') {
+				inBlockComment = true;
+				i++;
+				continue;
+			}
+
+			if (c == '"') {
+				inString = true;
+				continue;
+			}
+
+			if (c == '\'') {
+				inChar = true;
+				continue;
+			}
+
+			// Braces
+			if (c == '{') {
+				if (depth == 0) {
+					blockStart = i;
+				}
+				depth++;
+			} else if (c == '}') {
+				if (depth > 0) {
+					depth--;
+
+					if (depth == 0 && blockStart >= 0) {
+						String candidate =
+								str.substring(blockStart, i + 1).trim();
+
+						try {
+							statements.add(
+									StaticJavaParser.parseBlock(candidate)
+							);
+						} catch (ParseProblemException e) {
+							Logger.info(
+									"Ignoring malformed block within multi-block response:"
+							);
+							Logger.info(candidate);
+						}
+
+						blockStart = -1;
+					}
+				}
+			}
+		}
+
+		return statements;
+	}
 
 }
