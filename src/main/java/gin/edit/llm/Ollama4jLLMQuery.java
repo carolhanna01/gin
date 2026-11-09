@@ -87,6 +87,20 @@ public class Ollama4jLLMQuery implements LLMQuery {
 					.build();
                 OllamaResult result = ollamaAPI.generate(req, null);
                     //ollamaAPI.ask(modelType, prompt, new OptionsBuilder().build());
+
+                // Get prompt token count (Input)
+                long inputTokens = result.getPromptEvalCount();
+
+                // Get response token count (Output)
+                long outputTokens = result.getEvalCount();
+
+                // Calculate total
+                long totalTokens = inputTokens + outputTokens;
+
+                System.out.println("[INFO] Ollama@gin Prompt Tokens: " + inputTokens);
+                System.out.println("[INFO] Ollama@gin Completion Tokens: " + outputTokens);
+                System.out.println("[INFO] Ollama@gin Total Token Usage: " + totalTokens);
+
                 return result.getResponse();
         } catch (OllamaException e) {
                 // handle the exception
